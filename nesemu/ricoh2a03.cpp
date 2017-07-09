@@ -165,7 +165,6 @@ Ricoh2A03::instruction_name Ricoh2A03::get_instruction(const uint8_t opcode) {
 Ricoh2A03::addressing_mode Ricoh2A03::get_addressing(const uint8_t opcode) {
 	switch (opcode % 0x20) {
 		case 0x00:
-			// In lieu of an else statement, it uses the following cases. Do NOT add a break after the if statement!
 			if (opcode == 0x20)
 				return addressing_mode::abs;
 		case 0x02:
@@ -187,7 +186,6 @@ Ricoh2A03::addressing_mode Ricoh2A03::get_addressing(const uint8_t opcode) {
 			return addressing_mode::immediate;
 
 		case 0x0C:
-			// In lieu of an else statement, it uses the following cases. Do NOT add a break after the if statement!
 			if (opcode == 0x6C)
 				return addressing_mode::indirect;
 		case 0x0D: case 0x0E: case 0x0F:
@@ -234,6 +232,28 @@ void Ricoh2A03::process_next_instruction() {
 		case addressing_mode::zero:
 			value = ram[argument % 256];
 			break;
-		// TODO: add the rest here
+		case addressing_mode::abs_x:
+			value = ram[Register.X + argument];
+			break;
+		case addressing_mode::abs_y:
+			value = ram[Register.Y + argument];
+			break;
+		case addressing_mode::abs:
+			value = ram[argument];
+			break;
+		case addressing_mode::immediate:
+		case addressing_mode::relative:
+			// I think grouping relative here is fine because the branch op will know what to do with it
+			value = argument;
+			break;
+		case addressing_mode::ind_x:
+			value = ram[ram[(argument + Register.X) % 256] + ram[(argument + Register.X + 1) % 256] * 256];
+			break;
+		case addressing_mode::ind_y:
+			value = ram[ram[argument] + ram[(argument + 1) % 256] * 256 + Register.Y];
+			break;
+		case addressing_mode::indirect:
+			// TODO: figure this one out. only one command uses this so probably just call it here
+			break;
 	}
 }
