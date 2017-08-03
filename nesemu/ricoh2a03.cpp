@@ -2,28 +2,146 @@
 
 #include "ricoh2a03.h"
 
-Ricoh2A03::instruction_name Ricoh2A03::get_instruction(const uint8_t opcode) {
-	switch (opcode) {
+enum class FlagMask : uint8_t {
+	C  = 0b00000001,
+	Z  = 0b00000010,
+	I  = 0b00000100,
+	D  = 0b00001000,
+	S1 = 0b00010000,
+	S2 = 0b00100000,
+	V  = 0b01000000,
+	N  = 0b10000000
+};
+
+Ricoh2A03::addressing_mode Ricoh2A03::get_addressing(const uint8_t opcode) {
+	switch (opcode % 0x20) {
 		case 0x00:
+			if (opcode == 0x20)
+				return addressing_mode::abs;
+		case 0x02:
+			if (opcode < 0x80)
+				return addressing_mode::implicit;
+			else
+				return addressing_mode::immediate;
+
+		case 0x01: case 0x03:
+			return addressing_mode::ind_x;
+
+		case 0x04: case 0x05: case 0x06: case 0x07:
+			return addressing_mode::zero;
+			
+		case 0x08: case 0x0A: case 0x12: case 0x18: case 0x1A:
+			return addressing_mode::implicit;
+
+		case 0x09: case 0x0B:
+			return addressing_mode::immediate;
+
+		case 0x0C:
+			if (opcode == 0x6C)
+				return addressing_mode::indirect;
+		case 0x0D: case 0x0E: case 0x0F:
+			return addressing_mode::abs;
+
+		case 0x10:
+			return addressing_mode::relative;
+
+		case 0x11: case 0x13:
+			return addressing_mode::ind_y;
+
+		case 0x16: 	case 0x17:
+			if (opcode > 0x79 && opcode < 0xC0)
+				return addressing_mode::zero_y;
+		case 0x14: 	case 0x15:
+			return addressing_mode::zero_x;
+
+		case 0x19: case 0x1B:
+			return addressing_mode::abs_y;
+
+		case 0x1E: 	case 0x1F:
+			if (opcode > 0x79 && opcode < 0xC0)
+				return addressing_mode::abs_y;
+		case 0x1C: 	case 0x1D:
+			return addressing_mode::abs_x;
+	}
+	throw std::runtime_error(std::string("Unprocessed opcode : ") + std::to_string(opcode) + "\n");
+}
+
+void Ricoh2A03::process_next_instruction() {
+	const uint8_t opcode = ram[Register.PC];
+	instruction_name instruction = get_instruction(opcode);
+	addressing_mode addressing = get_addressing(opcode);;
+
+	// TODO: figure out the best way to handle 16-bit arguments
+	uint8_t argument = ram[Register.PC + 1];
+	uint8_t* value;
+	switch (addressing) {
+		case addressing_mode::zero_x:
+			value = &ram[(Register.X + argument) % 256];
+			break;
+		case addressing_mode::zero_y:
+			value = &ram[(Register.Y + argument) % 256];
+			break;
+		case addressing_mode::zero:
+			value = &ram[argument % 256];
+			break;
+		case addressing_mode::abs_x:
+			value = &ram[Register.X + argument];
+			break;
+		case addressing_mode::abs_y:
+			value = &ram[Register.Y + argument];
+			break;
+		case addressing_mode::abs:
+			value = &ram[argument];
+			break;
+		case addressing_mode::immediate:
+		case addressing_mode::relative:
+			// I think grouping relative here is fine because the branch op will know what to do with it
+			value = &argument;
+			break;
+		case addressing_mode::ind_x:
+			value = &ram[ram[(argument + Register.X) % 256] + ram[(argument + Register.X + 1) % 256] * 256];
+			break;
+		case addressing_mode::ind_y:
+			value = &ram[ram[argument] + ram[(argument + 1) % 256] * 256 + Register.Y];
+			break;
+		case addressing_mode::indirect:
+			// TODO: figure this one out. only one command uses this so probably just call it here
+			break;
+	}
+
+	switch (opcode) {
+		case 0x00:																				// BRK
 			return instruction_name::BRK;
-		case 0x01: case 0x05: case 0x09: case 0x0D: case 0x11: case 0x15: case 0x19: case 0x1D:
-			return instruction_name::ORA;
-		case 0x02: case 0x12: case 0x22: case 0x32: case 0x42: case 0x52: case 0x62: case 0x72:
+		case 0x01: case 0x05: case 0x09: case 0x0D: case 0x11: case 0x15: case 0x19: case 0x1D:	// ORA
+			Register.A |= *value;
+			if (Register.A == 0) Register.P |= (uint8_t)FlagMask::C;
+			Register.P |= Register.A & (uint8_t)FlagMask::N;
+			break;
+		case 0x02: case 0x12: case 0x22: case 0x32: case 0x42: case 0x52: case 0x62: case 0x72:	// STP
 		case 0x92: case 0xB2: case 0xD2: case 0xF2:
 			return instruction_name::STP;
 		case 0x03: case 0x07: case 0x0F: case 0x13: case 0x17: case 0x1B: case 0x1F:
 			return instruction_name::SLO;
-		case 0x06: case 0x0A: case 0x0E: case 0x16: case 0x1E:
-			return instruction_name::ASL;
-		case 0x08:
-			return instruction_name::PHP;
-		case 0x0B: case 0x2B:
+		case 0x06: case 0x0A: case 0x0E: case 0x16: case 0x1E:									// ASL
+			Register.P = (Register.P & ~(uint8_t)FlagMask::C) | (*value >> 7);
+			*value <<= 1;
+			Register.P |= *value & (uint8_t)FlagMask::N;
+			break;
+		case 0x08:																				// PHP
+			ram[Register.SP] = Register.P;
+			--Register.SP;
+			break;
+		case 0x0B: case 0x2B:																	// ANC
 			return instruction_name::ANC;
-		case 0x10:
-			return instruction_name::BPL;
-		case 0x18:
-			return instruction_name::CLC;
-		case 0x20:
+		case 0x10:																				// BPL
+			if (!(Register.P & (uint8_t)FlagMask::N)) Register.SP += *(reinterpret_cast<int8_t*>(value));
+			break;
+		case 0x18:																				// CLC
+			Register.A &= ~(uint8_t)FlagMask::C;
+			break;
+		case 0x20:																				// JSR
+			ram[Register.SP] = Register.PC + 3;
+			// TODO : figure this out
 			return instruction_name::JSR;
 		case 0x21: case 0x25: case 0x29: case 0x2D: case 0x31: case 0x35: case 0x39: case 0x3D:
 			return instruction_name::AND;
@@ -160,100 +278,4 @@ Ricoh2A03::instruction_name Ricoh2A03::get_instruction(const uint8_t opcode) {
 			return instruction_name::NOP;
 	}
 	throw std::runtime_error(std::string("Unprocessed opcode : ") + std::to_string(opcode) + "\n");
-}
-
-Ricoh2A03::addressing_mode Ricoh2A03::get_addressing(const uint8_t opcode) {
-	switch (opcode % 0x20) {
-		case 0x00:
-			if (opcode == 0x20)
-				return addressing_mode::abs;
-		case 0x02:
-			if (opcode < 0x80)
-				return addressing_mode::implicit;
-			else
-				return addressing_mode::immediate;
-
-		case 0x01: case 0x03:
-			return addressing_mode::ind_x;
-
-		case 0x04: case 0x05: case 0x06: case 0x07:
-			return addressing_mode::zero;
-			
-		case 0x08: case 0x0A: case 0x12: case 0x18: case 0x1A:
-			return addressing_mode::implicit;
-
-		case 0x09: case 0x0B:
-			return addressing_mode::immediate;
-
-		case 0x0C:
-			if (opcode == 0x6C)
-				return addressing_mode::indirect;
-		case 0x0D: case 0x0E: case 0x0F:
-			return addressing_mode::abs;
-
-		case 0x10:
-			return addressing_mode::relative;
-
-		case 0x11: case 0x13:
-			return addressing_mode::ind_y;
-
-		case 0x16: 	case 0x17:
-			if (opcode > 0x79 && opcode < 0xC0)
-				return addressing_mode::zero_y;
-		case 0x14: 	case 0x15:
-			return addressing_mode::zero_x;
-
-		case 0x19: case 0x1B:
-			return addressing_mode::abs_y;
-
-		case 0x1E: 	case 0x1F:
-			if (opcode > 0x79 && opcode < 0xC0)
-				return addressing_mode::abs_y;
-		case 0x1C: 	case 0x1D:
-			return addressing_mode::abs_x;
-	}
-	throw std::runtime_error(std::string("Unprocessed opcode : ") + std::to_string(opcode) + "\n");
-}
-
-void Ricoh2A03::process_next_instruction() {
-	instruction_name instruction = get_instruction(ram[Register.PC]);
-	addressing_mode addressing = get_addressing(ram[Register.PC]);;
-
-	// TODO: figure out the best way to handle 16-bit arguments
-	uint8_t argument = ram[Register.PC + 1];
-	uint8_t value;
-	switch (addressing) {
-		case addressing_mode::zero_x:
-			value = ram[(Register.X + argument) % 256];
-			break;
-		case addressing_mode::zero_y:
-			value = ram[(Register.Y + argument) % 256];
-			break;
-		case addressing_mode::zero:
-			value = ram[argument % 256];
-			break;
-		case addressing_mode::abs_x:
-			value = ram[Register.X + argument];
-			break;
-		case addressing_mode::abs_y:
-			value = ram[Register.Y + argument];
-			break;
-		case addressing_mode::abs:
-			value = ram[argument];
-			break;
-		case addressing_mode::immediate:
-		case addressing_mode::relative:
-			// I think grouping relative here is fine because the branch op will know what to do with it
-			value = argument;
-			break;
-		case addressing_mode::ind_x:
-			value = ram[ram[(argument + Register.X) % 256] + ram[(argument + Register.X + 1) % 256] * 256];
-			break;
-		case addressing_mode::ind_y:
-			value = ram[ram[argument] + ram[(argument + 1) % 256] * 256 + Register.Y];
-			break;
-		case addressing_mode::indirect:
-			// TODO: figure this one out. only one command uses this so probably just call it here
-			break;
-	}
 }
