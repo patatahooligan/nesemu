@@ -32,8 +32,6 @@ class Ricoh2A03 {
 			implicit
 		};
 
-		instruction_name get_instruction(const unsigned char opcode);
-
 		addressing_mode get_addressing(const unsigned char opcode);
 
 		void process_next_instruction();
