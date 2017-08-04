@@ -2,17 +2,6 @@
 
 #include "ricoh2a03.h"
 
-enum class FlagMask : unsigned char {
-	C  = 0b00000001,
-	Z  = 0b00000010,
-	I  = 0b00000100,
-	D  = 0b00001000,
-	S1 = 0b00010000,
-	S2 = 0b00100000,
-	V  = 0b01000000,
-	N  = 0b10000000
-};
-
 Ricoh2A03::addressing_mode Ricoh2A03::get_addressing(const unsigned char opcode) {
 	switch (opcode % 0x20) {
 		case 0x00:
@@ -68,7 +57,6 @@ Ricoh2A03::addressing_mode Ricoh2A03::get_addressing(const unsigned char opcode)
 
 void Ricoh2A03::process_next_instruction() {
 	const uint8_t opcode = ram[Register.PC];
-	instruction_name instruction = get_instruction(opcode);
 	addressing_mode addressing = get_addressing(opcode);;
 
 	// TODO: figure out the best way to handle 16-bit arguments
@@ -114,8 +102,8 @@ void Ricoh2A03::process_next_instruction() {
 			return instruction_name::BRK;
 		case 0x01: case 0x05: case 0x09: case 0x0D: case 0x11: case 0x15: case 0x19: case 0x1D:	// ORA
 			Register.A |= *value;
-			if (Register.A == 0) Register.P |= (unsigned char)FlagMask::C;
-			Register.P |= Register.A & (unsigned char)FlagMask::N;
+			set_flag(Flag::Carry, Register.A == 0);
+			set_flag(Flag::Negative, Register.A > 127);
 			break;
 		case 0x02: case 0x12: case 0x22: case 0x32: case 0x42: case 0x52: case 0x62: case 0x72:	// STP
 		case 0x92: case 0xB2: case 0xD2: case 0xF2:
@@ -123,9 +111,9 @@ void Ricoh2A03::process_next_instruction() {
 		case 0x03: case 0x07: case 0x0F: case 0x13: case 0x17: case 0x1B: case 0x1F:
 			return instruction_name::SLO;
 		case 0x06: case 0x0A: case 0x0E: case 0x16: case 0x1E:									// ASL
-			Register.P = (Register.P & ~(unsigned char)FlagMask::C) | (*value >> 7);
+			set_flag(Flag::Carry, *value > 127);
 			*value <<= 1;
-			Register.P |= *value & (unsigned char)FlagMask::N;
+			set_flag(Flag::Negative, *value > 127);
 			break;
 		case 0x08:																				// PHP
 			ram[Register.SP] = Register.P;
@@ -134,17 +122,17 @@ void Ricoh2A03::process_next_instruction() {
 		case 0x0B: case 0x2B:																	// ANC
 			return instruction_name::ANC;
 		case 0x10:																				// BPL
-			if (!(Register.P & (unsigned char)FlagMask::N))
-				Register.SP += *(reinterpret_cast<unsigned char*>(value));
+			if (!get_flag(Flag::Negative))
+				// Must read argument as signed for relative addressing mode
+				Register.SP += reinterpret_cast<signed char&>(argument);
 			break;
 		case 0x18:																				// CLC
-			Register.A &= ~(unsigned char)FlagMask::C;
+			set_flag(Flag::Carry, false);
 			break;
 		case 0x20:																				// JSR
-			ram[Register.SP] = Register.PC + 3;
-			// TODO : figure this out
 			return instruction_name::JSR;
-		case 0x21: case 0x25: case 0x29: case 0x2D: case 0x31: case 0x35: case 0x39: case 0x3D:
+		case 0x21: case 0x25: case 0x29: case 0x2D: case 0x31: case 0x35: case 0x39: case 0x3D:	// AND
+			Register.A &= 
 			return instruction_name::AND;
 		case 0x23: case 0x27: case 0x2F: case 0x33: case 0x37: case 0x3B: case 0x3F:
 			return instruction_name::RLA;
@@ -279,4 +267,29 @@ void Ricoh2A03::process_next_instruction() {
 			return instruction_name::NOP;
 	}
 	throw std::runtime_error(std::string("Unprocessed opcode : ") + std::to_string(opcode) + "\n");
+}
+
+void Ricoh2A03::set_flag(Flag flag, bool value) {
+	// This depends on Flag having the proper order of the bits
+	// from least significant (0) to most significant(7)
+
+	// Create a mask with 1 in the appropriate position and 0 elsewhere
+	unsigned char mask = (unsigned char)1 << (std::underlying_type_t<Flag>)flag;
+	
+	if (value) {
+		// Set the bit pointed to by mask without affecting others
+		Register.P |= mask;
+	}
+	else {
+		// Keep all other bits but reset the pointee
+		Register.P &= ~mask;
+	}
+}
+
+bool Ricoh2A03::get_flag(Flag flag) {
+	// Create a mask with 1 in the appropriate position and 0 elsewhere
+	unsigned char mask = (unsigned char)1 << (std::underlying_type_t<Flag>)flag;
+
+	// Integral conversion to bool is false for 0, true otherwise
+	return (bool)Register.P | mask;
 }
