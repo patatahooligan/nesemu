@@ -2,7 +2,7 @@
 
 #include "ricoh2a03.h"
 
-enum class FlagMask : uint8_t {
+enum class FlagMask : unsigned char {
 	C  = 0b00000001,
 	Z  = 0b00000010,
 	I  = 0b00000100,
@@ -13,7 +13,7 @@ enum class FlagMask : uint8_t {
 	N  = 0b10000000
 };
 
-Ricoh2A03::addressing_mode Ricoh2A03::get_addressing(const uint8_t opcode) {
+Ricoh2A03::addressing_mode Ricoh2A03::get_addressing(const unsigned char opcode) {
 	switch (opcode % 0x20) {
 		case 0x00:
 			if (opcode == 0x20)
@@ -72,8 +72,8 @@ void Ricoh2A03::process_next_instruction() {
 	addressing_mode addressing = get_addressing(opcode);;
 
 	// TODO: figure out the best way to handle 16-bit arguments
-	uint8_t argument = ram[Register.PC + 1];
-	uint8_t* value;
+	unsigned char argument = ram[Register.PC + 1];
+	unsigned char* value;
 	switch (addressing) {
 		case addressing_mode::zero_x:
 			value = &ram[(Register.X + argument) % 256];
@@ -114,8 +114,8 @@ void Ricoh2A03::process_next_instruction() {
 			return instruction_name::BRK;
 		case 0x01: case 0x05: case 0x09: case 0x0D: case 0x11: case 0x15: case 0x19: case 0x1D:	// ORA
 			Register.A |= *value;
-			if (Register.A == 0) Register.P |= (uint8_t)FlagMask::C;
-			Register.P |= Register.A & (uint8_t)FlagMask::N;
+			if (Register.A == 0) Register.P |= (unsigned char)FlagMask::C;
+			Register.P |= Register.A & (unsigned char)FlagMask::N;
 			break;
 		case 0x02: case 0x12: case 0x22: case 0x32: case 0x42: case 0x52: case 0x62: case 0x72:	// STP
 		case 0x92: case 0xB2: case 0xD2: case 0xF2:
@@ -123,9 +123,9 @@ void Ricoh2A03::process_next_instruction() {
 		case 0x03: case 0x07: case 0x0F: case 0x13: case 0x17: case 0x1B: case 0x1F:
 			return instruction_name::SLO;
 		case 0x06: case 0x0A: case 0x0E: case 0x16: case 0x1E:									// ASL
-			Register.P = (Register.P & ~(uint8_t)FlagMask::C) | (*value >> 7);
+			Register.P = (Register.P & ~(unsigned char)FlagMask::C) | (*value >> 7);
 			*value <<= 1;
-			Register.P |= *value & (uint8_t)FlagMask::N;
+			Register.P |= *value & (unsigned char)FlagMask::N;
 			break;
 		case 0x08:																				// PHP
 			ram[Register.SP] = Register.P;
@@ -134,10 +134,11 @@ void Ricoh2A03::process_next_instruction() {
 		case 0x0B: case 0x2B:																	// ANC
 			return instruction_name::ANC;
 		case 0x10:																				// BPL
-			if (!(Register.P & (uint8_t)FlagMask::N)) Register.SP += *(reinterpret_cast<int8_t*>(value));
+			if (!(Register.P & (unsigned char)FlagMask::N))
+				Register.SP += *(reinterpret_cast<unsigned char*>(value));
 			break;
 		case 0x18:																				// CLC
-			Register.A &= ~(uint8_t)FlagMask::C;
+			Register.A &= ~(unsigned char)FlagMask::C;
 			break;
 		case 0x20:																				// JSR
 			ram[Register.SP] = Register.PC + 3;

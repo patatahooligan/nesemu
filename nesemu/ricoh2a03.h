@@ -6,7 +6,7 @@ class Ricoh2A03 {
 	private:
 		struct {
 			uint16_t PC;
-			uint8_t
+			char
 				SP = 0xFD,
 				P = 0x34,
 				A = 0,
@@ -14,7 +14,7 @@ class Ricoh2A03 {
 				Y = 0;
 		} Register;
 
-		uint8_t ram[2048];
+		unsigned char ram[2048];
 
 		enum class instruction_name {
 			ADC, AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, BRK, BVC, BVS, CLC,
@@ -32,9 +32,9 @@ class Ricoh2A03 {
 			implicit
 		};
 
-		instruction_name get_instruction(const uint8_t opcode);
+		instruction_name get_instruction(const unsigned char opcode);
 
-		addressing_mode get_addressing(const uint8_t opcode);
+		addressing_mode get_addressing(const unsigned char opcode);
 
 		void process_next_instruction();
 };
