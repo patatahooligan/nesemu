@@ -56,7 +56,7 @@ Ricoh2A03::addressing_mode Ricoh2A03::get_addressing(const unsigned char opcode)
 }
 
 void Ricoh2A03::process_next_instruction() {
-	const uint8_t opcode = ram[Register.PC];
+	const unsigned char opcode = ram[Register.PC];
 	addressing_mode addressing = get_addressing(opcode);;
 
 	// TODO: figure out the best way to handle 16-bit arguments
