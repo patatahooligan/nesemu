@@ -37,16 +37,16 @@ Ricoh2A03::addressing_mode Ricoh2A03::get_addressing(const unsigned char opcode)
 		case 0x11: case 0x13:
 			return addressing_mode::ind_y;
 
-		case 0x16: 	case 0x17:
+		case 0x16: case 0x17:
 			if (opcode > 0x79 && opcode < 0xC0)
 				return addressing_mode::zero_y;
-		case 0x14: 	case 0x15:
+		case 0x14: case 0x15:
 			return addressing_mode::zero_x;
 
 		case 0x19: case 0x1B:
 			return addressing_mode::abs_y;
 
-		case 0x1E: 	case 0x1F:
+		case 0x1E: case 0x1F:
 			if (opcode > 0x79 && opcode < 0xC0)
 				return addressing_mode::abs_y;
 		case 0x1C: 	case 0x1D:
