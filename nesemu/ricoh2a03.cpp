@@ -302,5 +302,5 @@ bool Ricoh2A03::get_flag(Flag flag) {
 	ubyte_t mask = (ubyte_t)1 << (std::underlying_type_t<Flag>)flag;
 
 	// Integral conversion to bool is false for 0, true otherwise
-	return (bool)Register.P | mask;
+	return bool(Register.P | mask);
 }
