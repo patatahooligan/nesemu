@@ -2,7 +2,7 @@
 
 #include "ricoh2a03.h"
 
-Ricoh2A03::addressing_mode Ricoh2A03::get_addressing(const unsigned char opcode) {
+Ricoh2A03::addressing_mode Ricoh2A03::get_addressing(const ubyte_t opcode) {
 	switch (opcode % 0x20) {
 		case 0x00:
 			if (opcode == 0x20)
@@ -56,12 +56,12 @@ Ricoh2A03::addressing_mode Ricoh2A03::get_addressing(const unsigned char opcode)
 }
 
 void Ricoh2A03::process_next_instruction() {
-	const unsigned char opcode = ram[Register.PC];
+	const ubyte_t opcode = ram[Register.PC];
 	addressing_mode addressing = get_addressing(opcode);;
 
 	// TODO: figure out the best way to handle 16-bit arguments
-	unsigned char argument = ram[Register.PC + 1];
-	unsigned char* value;
+	ubyte_t argument = ram[Register.PC + 1];
+	ubyte_t* value;
 	switch (addressing) {
 		case addressing_mode::zero_x:
 			value = &ram[(Register.X + argument) % 256];
@@ -132,14 +132,25 @@ void Ricoh2A03::process_next_instruction() {
 		case 0x20:																				// JSR
 			return instruction_name::JSR;
 		case 0x21: case 0x25: case 0x29: case 0x2D: case 0x31: case 0x35: case 0x39: case 0x3D:	// AND
-			Register.A &= 
-			return instruction_name::AND;
+			Register.A &= *value;
+			set_flag(Flag::Zero, (bool)Register.A);
+			set_flag(Flag::Negative, Register.A > 127);
+			break;
 		case 0x23: case 0x27: case 0x2F: case 0x33: case 0x37: case 0x3B: case 0x3F:
 			return instruction_name::RLA;
 		case 0x24: case 0x2C:
-			return instruction_name::BIT;
+			// Copy bits 6 and 7 from memory to flag register
+			Register.P = (Register.P & 0b00111111) | *value;
+			set_flag(Flag::Zero, bool(Register.A & *value));
+			break;
 		case 0x26: case 0x2A: case 0x2E: case 0x36: case 0x3E:
-			return instruction_name::ROL;
+		{
+			if (addressing == addressing_mode::implicit) value = &Register.A;
+			bool new_carry = *value > 127;              // Grab old 7th bit for new carry flag
+			*value = (*value << 1) | (Register.P & 1);  // Insert old carry flag as LSB
+			set_flag(Flag::Carry, new_carry);
+			break;
+		}
 		case 0x28:
 			return instruction_name::PLP;
 		case 0x30:
@@ -274,7 +285,7 @@ void Ricoh2A03::set_flag(Flag flag, bool value) {
 	// from least significant (0) to most significant(7)
 
 	// Create a mask with 1 in the appropriate position and 0 elsewhere
-	unsigned char mask = (unsigned char)1 << (std::underlying_type_t<Flag>)flag;
+	ubyte_t mask = (ubyte_t)1 << (std::underlying_type_t<Flag>)flag;
 	
 	if (value) {
 		// Set the bit pointed to by mask without affecting others
@@ -288,7 +299,7 @@ void Ricoh2A03::set_flag(Flag flag, bool value) {
 
 bool Ricoh2A03::get_flag(Flag flag) {
 	// Create a mask with 1 in the appropriate position and 0 elsewhere
-	unsigned char mask = (unsigned char)1 << (std::underlying_type_t<Flag>)flag;
+	ubyte_t mask = (ubyte_t)1 << (std::underlying_type_t<Flag>)flag;
 
 	// Integral conversion to bool is false for 0, true otherwise
 	return (bool)Register.P | mask;

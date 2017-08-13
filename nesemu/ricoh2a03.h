@@ -35,9 +35,13 @@ class Ricoh2A03 {
 			implicit
 		};
 
+		// Aliases for the register and Ram types
+		using byte_t = int8_t;
+		using ubyte_t = uint8_t;
+
 		struct {
 			uint16_t PC;
-			unsigned char
+			ubyte_t
 				SP = 0xFD,
 				P = 0x34,
 				A = 0,
@@ -45,9 +49,9 @@ class Ricoh2A03 {
 				Y = 0;
 		} Register;
 
-		unsigned char ram[2048];
+		ubyte_t ram[2048];
 
-		addressing_mode get_addressing(const unsigned char opcode);
+		addressing_mode get_addressing(const ubyte_t opcode);
 
 		void process_next_instruction();
 
