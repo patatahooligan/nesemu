@@ -124,7 +124,7 @@ void Ricoh2A03::process_next_instruction() {
 		case 0x10:																				// BPL
 			if (!get_flag(Flag::Negative))
 				// Must read argument as signed for relative addressing mode
-				Register.SP += reinterpret_cast<signed char&>(argument);
+				Register.PC += reinterpret_cast<byte_t&>(argument);
 			break;
 		case 0x18:																				// CLC
 			set_flag(Flag::Carry, false);
@@ -133,17 +133,17 @@ void Ricoh2A03::process_next_instruction() {
 			return instruction_name::JSR;
 		case 0x21: case 0x25: case 0x29: case 0x2D: case 0x31: case 0x35: case 0x39: case 0x3D:	// AND
 			Register.A &= *value;
-			set_flag(Flag::Zero, (bool)Register.A);
+			set_flag(Flag::Zero, bool(Register.A));
 			set_flag(Flag::Negative, Register.A > 127);
 			break;
-		case 0x23: case 0x27: case 0x2F: case 0x33: case 0x37: case 0x3B: case 0x3F:
+		case 0x23: case 0x27: case 0x2F: case 0x33: case 0x37: case 0x3B: case 0x3F:			// RLA
 			return instruction_name::RLA;
 		case 0x24: case 0x2C:
 			// Copy bits 6 and 7 from memory to flag register
 			Register.P = (Register.P & 0b00111111) | *value;
 			set_flag(Flag::Zero, bool(Register.A & *value));
 			break;
-		case 0x26: case 0x2A: case 0x2E: case 0x36: case 0x3E:
+		case 0x26: case 0x2A: case 0x2E: case 0x36: case 0x3E:									// ROL
 		{
 			if (addressing == addressing_mode::implicit) value = &Register.A;
 			bool new_carry = *value > 127;              // Grab old 7th bit for new carry flag
@@ -151,20 +151,33 @@ void Ricoh2A03::process_next_instruction() {
 			set_flag(Flag::Carry, new_carry);
 			break;
 		}
-		case 0x28:
+		case 0x28:																				// PLP
 			return instruction_name::PLP;
-		case 0x30:
-			return instruction_name::BMI;
-		case 0x38:
-			return instruction_name::SEC;
+		case 0x30:																				// BMI
+			if (get_flag(Flag::Negative)) {
+				Register.PC += reinterpret_cast<byte_t&>(argument);
+			}
+			break;
+		case 0x38:																				// SEC
+			set_flag(Flag::Carry, true);
+			break;
 		case 0x40:
 			return instruction_name::RTI;
-		case 0x41: case 0x45: case 0x49: case 0x4D: case 0x51: case 0x55: case 0x59: case 0x5D:
-			return instruction_name::EOR;
-		case 0x43: case 0x47: case 0x4F: case 0x53: case 0x57: case 0x5B: case 0x5F:
+		case 0x41: case 0x45: case 0x49: case 0x4D: case 0x51: case 0x55: case 0x59: case 0x5D:	// EOR
+			Register.A ^= *value;
+			set_flag(Flag::Zero, !bool(Register.A));
+			set_flag(Flag::Negative, Register.A > 127);
+			break;
+		case 0x43: case 0x47: case 0x4F: case 0x53: case 0x57: case 0x5B: case 0x5F:			// SRE
 			return instruction_name::SRE;
-		case 0x46: case 0x4A: case 0x4E: case 0x56: case 0x5E:
-			return instruction_name::LSR;
+		case 0x46: case 0x4A: case 0x4E: case 0x56: case 0x5E:									// LSR
+			if (addressing == addressing_mode::implicit)
+				value = &Register.A;
+			set_flag(Flag::Carry, bool(*value & 1));
+			*value >>= 1;
+			set_flag(Flag::Zero, !bool(value));
+			set_flag(Flag::Negative, *value > 127);
+			break;
 		case 0x48:
 			return instruction_name::PHA;
 		case 0x4B:

@@ -36,6 +36,8 @@ class Ricoh2A03 {
 		};
 
 		// Aliases for the register and Ram types
+		// The underlying type needs to be in 2-complement representation
+		// and it must be valid to alias one with the other.
 		using byte_t = int8_t;
 		using ubyte_t = uint8_t;
 
